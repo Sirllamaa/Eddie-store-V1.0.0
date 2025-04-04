@@ -1,0 +1,27 @@
+# Ignore virtual environment
+.venv/
+venv/
+
+# Ignore environment variable files
+.env
+
+# Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Logs
+*.log
+
+# IDE/editor settings
+.vscode/
+.idea/
+
+# macOS + Windows
+.DS_Store
+Thumbs.db
