@@ -1,17 +1,26 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from config import SECRET_KEY, ALGORITHM
+# auth.py (or wherever you keep your auth utilities in App B)
+from fastapi import HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import jwt
+from typing import Dict
+from datetime import datetime
+from config import SERVICE_AUTH_KEY, SERVICE_AUTH_ALGORITHM  # Make sure this is consistent with App A
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/token")
+security = HTTPBearer()
 
-def verify_token(token: str = Depends(oauth2_scheme)):
+def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict:
+    token = credentials.credentials
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        role: str = payload.get("role")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return {"username": username, "role": role}
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Token validation failed")
+        payload = jwt.decode(token, SERVICE_AUTH_KEY, algorithms=[SERVICE_AUTH_ALGORITHM])
+        
+        # Optional: check expiration manually (jwt does this too)
+        exp = payload.get("exp")
+        if exp and datetime.utcfromtimestamp(exp) < datetime.utcnow():
+            raise HTTPException(status_code=401, detail="Token expired")
+
+        return payload  # contains 'sub', 'role', etc.
+
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
