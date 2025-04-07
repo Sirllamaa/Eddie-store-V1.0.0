@@ -24,23 +24,21 @@ def secure_data(user_info: dict = Depends(verify_token)):
     }
     
 class MemoryInput(BaseModel):
-    username: str
     text: str
     embedding: List[float]
     metadata: Optional[dict] = None
 
 class QueryInput(BaseModel):
-    username: str
     embedding: List[float]
     top_k: int = 5
 
-class RemoveInput(BaseModel):
-    username: str
-    ids: List[str]
+# class RemoveInput(BaseModel):
+#     username: str
+#     ids: List[str]
 
 @v1_router.post("/memory/add")
 def add_memory(mem: MemoryInput, user=Depends(verify_token)):
-    collection = get_collection(mem.username)
+    collection = get_collection(user["sub"])
     metadata = mem.metadata or {}
     metadata["timestamp"] = datetime.utcnow().isoformat()
 
@@ -50,11 +48,11 @@ def add_memory(mem: MemoryInput, user=Depends(verify_token)):
         embeddings=[mem.embedding],
         metadatas=[metadata]
     )
-    return {"status": "ok", "username": mem.username}
+    return {"status": "ok", "username": user["sub"]}
 
 @v1_router.post("/memory/query")
 def query_memory(query: QueryInput, user=Depends(verify_token)):
-    collection = get_collection(query.username)
+    collection = get_collection(user["sub"])
     results = collection.query(
         query_embeddings=[query.embedding],
         n_results=query.top_k
@@ -63,20 +61,25 @@ def query_memory(query: QueryInput, user=Depends(verify_token)):
 
 @v1_router.get("/memory/dbs")
 def get_memory_dbs(user=Depends(verify_token)):
-    return {"collections": list_collections()}
+    if user["role"] == "admin" or user["role"] == "system":
+        return {"collections": list_collections()}
+    else:
+        raise HTTPException(status_code=403, detail="Access forbidden: Admins only")
 
-@v1_router.post("/memory/remove")
-def remove_memories(data: RemoveInput, user=Depends(verify_token)):
-    collection = get_collection(data.username)
-    try:
-        collection.delete(ids=data.ids)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    return {"status": "ok", "removed": data.ids}
+# @v1_router.post("/memory/remove")
+# def remove_memories(data: RemoveInput, user=Depends(verify_token)):
+#     if user["sub"] != data.username and user["role"] != "admin":
+#         raise HTTPException(status_code=403, detail="You can only delete your own memory.")
+#     collection = get_collection(data.username)
+#     try:
+#         collection.delete(ids=data.ids)
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=str(e))
+#     return {"status": "ok", "removed": data.ids}
 
 @v1_router.delete("/memory/user/{username}")
 def delete_user_memory(username: str, user=Depends(verify_token)):
-    if user["sub"] != username and user["role"] != "system":
+    if user["sub"] != username and user["role"] != "admin":
         raise HTTPException(status_code=403, detail="You can only delete your own memory.")
 
     from db.chroma_setup import client
